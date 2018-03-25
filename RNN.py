@@ -1,13 +1,13 @@
 import tensorflow as tf
 import numpy as np
 
-num_epochs = 200 #The number of times we iterate through the training data
+num_epochs = 1000 #The number of times we iterate through the training data
 learning_rate = 0.01 #The size of the steps we take in the gradient descent
-batch_size = 50 #How many characters we feed through before back-propagating all of them
+batch_size = 200 #How many characters we feed through before back-propagating all of them
 num_cells = 80
 
 def read_files():
-    njala = open(file='Islendingasogur/BrennuNjalsSaga.txt',encoding='UTF-8')
+    njala = open(file='Islendingasogur/HranaSagaHrings.txt',encoding='UTF-8')
     #Todo: read more sagas in and concatenate them
     return njala.read()
 
@@ -38,8 +38,53 @@ def make_rnn():
 
     return pred
 
-input_data, output_data, unique_characters = embed(read_files())
+def train(optimizer, input_p, output_p):
+        #For each batch of data
+        for i in range(len(input_data) // batch_size):
+            in_batch = input_data[i * batch_size: i * batch_size + batch_size] #The i-th batch of input data.
+            out_batch = output_data[i * batch_size:i * batch_size + batch_size] #The i-th batch of output data
+            sess.run([optimizer], feed_dict={input_p: in_batch, output_p: out_batch})
 
+def generate(seed):
+    tac = ''
+    one_run = sess.run([pred], feed_dict={input_p: in_batch})
+
+    for i in range(200):
+        seed = seed[1:] #Remove the first character from the seed
+        seed = np.concatenate((seed, [one_run[0][0]])) #Append the just-generated character to the seed
+
+        one_run = sess.run([pred], feed_dict={input_p: seed})
+        predicted = np.asarray(one_run[0]).astype('float64')[0]
+        index, probabilities = activate_clean(predicted)
+        predicted_chars = unique_characters[index]
+        tac += predicted_chars #Just take the character with the highest probability for now.
+
+    print("Epoch nr ", j, ": ", tac)
+
+def sigmoid(x):
+    return np.exp(x) / (1+np.exp(x))
+
+def activate_clean(output):
+
+    #Output is a probability distribution.
+    #We want to select a character based on this distribution, but always selecting the character with the highest
+    #probability is not correct, as the highest probability is not necessarily 100%, so we use
+    #np.random.multinomial to select a character randomly, based on the probabilities.
+
+
+    #First we must normalize the probability distribution.  We start by getting all positive numbers by running the values through an activation function.
+
+    #Activate
+    output = sigmoid(output)
+    #Normalize
+    output = output / np.sum(output)
+
+    clean_output = np.random.multinomial(1, output, 1)
+    index_of_probability = np.argmax(clean_output)
+
+    return index_of_probability, output
+
+input_data, output_data, unique_characters = embed(read_files())
 
 #These become our input and output nodes.
 input_p =  tf.placeholder(tf.float32, [None, len(unique_characters)])
@@ -51,9 +96,15 @@ pred = make_rnn()
 in_batch = input_data[:batch_size]
 out_batch = output_data[:batch_size]
 
-#Now they're tensors
+#Tensor versions
 tf_in_batch = tf.convert_to_tensor(in_batch, tf.float32)
 tf_out_batch = tf.convert_to_tensor(out_batch, tf.float32)
+
+# Parameters for back propagation
+cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = pred, labels = output_p)) #Our cost function
+optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost) #We will use gradient descent to find a local minimum of the cost function.
+
+#tf.scalar_summary("cost", cost)
 
 #Our sweet tensorflow session!
 sess = tf.Session()
@@ -62,26 +113,14 @@ sess = tf.Session()
 init = tf.global_variables_initializer()
 sess.run(init)
 
-# Parameters for back propagation
-cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=output_p)) #Our cost function
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost) #We will use gradient descent to find a local minimum of the cost function.
-correct_pred = tf.equal(tf.argmax(pred,1), tf.argmax(output_p, 1)) #
-accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+#Tensorboard setup
+file_writer = tf.summary.FileWriter('./logs')
+file_writer.add_graph(sess.graph)
 
-#Initial session with random stuff in it. (i bet)
-
-
-#Try sweet run
 for j in range(num_epochs):
-    for i in range(len(input_data) // batch_size):
-        in_batch = input_data[i * batch_size: i * batch_size + batch_size]
-        out_batch =  output_data[i * batch_size:i * batch_size + batch_size]
 
-        sess.run(optimizer, feed_dict={input_p: in_batch, output_p:out_batch})
-
-    one_run = sess.run(pred, feed_dict = {input_p: in_batch})
-    tac = ''
-    for i in range(batch_size):
-        #print(unique_characters[input_data[i].tolist().index(input_data[i].max())])
-        tac +=  unique_characters[one_run[i].tolist().index(one_run[i].max())]
-    print("Batch nr ", j, ": ", tac)
+    #Train our model
+    train(optimizer, input_p, output_p)
+    #Test it by making it generate some characters
+    generate(input_data[3 * batch_size: 3 * batch_size + batch_size]) #For now the seed will just be the third batch.
+    #TODO: allow user-input seeds
