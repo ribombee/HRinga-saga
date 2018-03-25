@@ -58,17 +58,15 @@ def train(optimizer, input_p, output_p):
     for i in range(len(input_data) // batch_size):
         in_batch = input_data[i * batch_size: i * batch_size + batch_size]  # The i-th batch of input data.
         out_batch = output_data[i * batch_size:i * batch_size + batch_size]  # The i-th batch of output data
-        sess.run([optimizer], feed_dict={input_p: in_batch, output_p: out_batch})
-        '''
-        # Every 20 steps we generate a summary for tensorboard.
-        if i%20 == 0:
-            summary, acc = sess.run([merged, acc_op], feed_dict={input_p: seed})
-        '''
+        o, loss, acc = sess.run([optimizer, cost, acc_op_t], feed_dict={input_p: in_batch, output_p: out_batch})
+
+        if i%50 == 0:
+            print("loss: ", loss, "Accuracy", acc)
+
 
 
 def generate(seed):
     '''
-
     :param seed:
     :return:
     '''
@@ -136,6 +134,10 @@ if __name__ == '__main__':
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = pred, labels = output_p))  # Our cost function
     # We will use gradient descent to find a local minimum of the cost function.
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
+
+    #Accuracy shit
+    correct_pred_t = tf.equal(tf.argmax(output_p, 1), tf.argmax(input_p, 1))  # Count correct predictions
+    acc_op_t = tf.reduce_mean(tf.cast(correct_pred_t, "float"))  # Cast boolean to float to average
 
     with tf.name_scope("accuracy"):
         correct_pred = tf.equal(tf.argmax(output_p, 1), tf.argmax(input_p, 1)) # Count correct predictions
