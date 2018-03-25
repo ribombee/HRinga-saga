@@ -12,9 +12,12 @@ def read_files():
     return njala.read()
 
 
-# The data is embedded into numerical data (vectors to represent characters) that we can use to train our RNN.
 def embed(sagas):
-
+    '''
+    The data is embedded into numerical data (vectors to represent characters) that we can use to train our RNN.
+    :param sagas: Training data
+    :return:
+    '''
     unique_characters = list(set(sagas))  # All unique characters in our sagas.  We use this to generate the invidividual input vectors representing single characters.
 
     input_data= np.zeros((len(sagas), len(unique_characters)))
@@ -29,8 +32,12 @@ def embed(sagas):
 
 
 def make_rnn():
-    weights = tf.Variable(tf.random_normal([num_cells, len(unique_characters)]))
-    biases = tf.Variable(tf.random_normal([len(unique_characters)]))
+    '''
+    Instantiates a recurrant neural network.
+    :return:
+    '''
+    weights = tf.Variable(tf.random_normal([num_cells, len(unique_characters)]), name='weights')
+    biases = tf.Variable(tf.random_normal([len(unique_characters)]), name='biases')
 
     lstm = tf.contrib.rnn.BasicLSTMCell(num_cells)
     output = tf.nn.static_rnn(cell=lstm, inputs=[tf.convert_to_tensor(input_p)], dtype=tf.float32)[0]
@@ -41,14 +48,30 @@ def make_rnn():
 
 
 def train(optimizer, input_p, output_p):
-        # For each batch of data
-        for i in range(len(input_data) // batch_size):
-            in_batch = input_data[i * batch_size: i * batch_size + batch_size]  # The i-th batch of input data.
-            out_batch = output_data[i * batch_size:i * batch_size + batch_size]  # The i-th batch of output data
-            sess.run([optimizer], feed_dict={input_p: in_batch, output_p: out_batch})
+    '''
+    Trains the model, 1 pass over the input data.
+    :param optimizer: an optimizer
+    :param input_p: input node
+    :param output_p: output node
+    '''
+    # For each batch of data
+    for i in range(len(input_data) // batch_size):
+        in_batch = input_data[i * batch_size: i * batch_size + batch_size]  # The i-th batch of input data.
+        out_batch = output_data[i * batch_size:i * batch_size + batch_size]  # The i-th batch of output data
+        sess.run([optimizer], feed_dict={input_p: in_batch, output_p: out_batch})
+        '''
+        # Every 20 steps we generate a summary for tensorboard.
+        if i%20 == 0:
+            summary, acc = sess.run([merged, acc_op], feed_dict={input_p: seed})
+        '''
 
 
 def generate(seed):
+    '''
+
+    :param seed:
+    :return:
+    '''
     tac = ''
     one_run = sess.run([pred], feed_dict={input_p: seed})
 
@@ -57,11 +80,7 @@ def generate(seed):
         seed = np.concatenate((seed, [one_run[0][0]]))  # Append the just-generated character to the seed
 
         one_run = sess.run([pred], feed_dict={input_p: seed})
-        '''
-        # Every 20 steps we generate a summary for tensorboard.
-        if i%20 == 0:
-            summary, acc = sess.run([merged, acc_op], feed_dict={input_p: seed})
-        '''
+
         predicted = np.asarray(one_run[0]).astype('float64')[0]
         index, probabilities = activate_clean(predicted)
         predicted_chars = unique_characters[index]
@@ -73,6 +92,11 @@ def generate(seed):
 
 
 def sigmoid(x):
+    '''
+    The sigmoid function.
+    :param x:
+    :return: sigmoid(x)
+    '''
     return np.exp(x) / (1+np.exp(x))
 
 
@@ -82,8 +106,9 @@ def activate_clean(output):
     We want to select a character based on this distribution, but always selecting the character with the highest
     probability is not correct, as the highest probability is not necessarily 100%, so we use
     np.random.multinomial to select a character randomly, based on the probabilities.
+    :param output:
+    :return:
     '''
-
     # First we must normalize the probability distribution.
     # We start by getting all positive numbers by running the values through an activation function.
 
@@ -98,43 +123,44 @@ def activate_clean(output):
     return index_of_probability, output
 
 
-input_data, output_data, unique_characters = embed(read_files())
+if __name__ == '__main__':
+    input_data, output_data, unique_characters = embed(read_files())
 
-# These become our input and output nodes.
-input_p = tf.placeholder(tf.float32, [None, len(unique_characters)], name='input_p')
-output_p = tf.placeholder(tf.float32, [None, len(unique_characters)], name='output_p')
+    # These become our input and output nodes.
+    input_p = tf.placeholder(tf.float32, [None, len(unique_characters)], name='input_p')
+    output_p = tf.placeholder(tf.float32, [None, len(unique_characters)], name='output_p')
 
-pred = make_rnn()
+    pred = make_rnn()
 
-# Parameters for back propagation
-cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = pred, labels = output_p))  # Our cost function
-# We will use gradient descent to find a local minimum of the cost function.
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
+    # Parameters for back propagation
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = pred, labels = output_p))  # Our cost function
+    # We will use gradient descent to find a local minimum of the cost function.
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
 
-with tf.name_scope("accuracy"):
-    correct_pred = tf.equal(tf.argmax(output_p, 1), tf.argmax(input_p, 1)) # Count correct predictions
-    acc_op = tf.reduce_mean(tf.cast(correct_pred, "float")) # Cast boolean to float to average
-    # Add scalar summary for accuracy tensor
-    tf.summary.scalar("accuracy", acc_op)
+    with tf.name_scope("accuracy"):
+        correct_pred = tf.equal(tf.argmax(output_p, 1), tf.argmax(input_p, 1)) # Count correct predictions
+        acc_op = tf.reduce_mean(tf.cast(correct_pred, "float")) # Cast boolean to float to average
+        # Add scalar summary for accuracy tensor
+        tf.summary.scalar("accuracy", acc_op)
 
-# Our tensorflow session!
-sess = tf.Session()
+    # Our tensorflow session!
+    sess = tf.Session()
 
-# Initialise
-init = tf.global_variables_initializer()
-sess.run(init)
+    # Initialise
+    init = tf.global_variables_initializer()
+    sess.run(init)
 
-# Tensorboard setup
-writer1 = tf.summary.FileWriter('./logs')
-writer1.add_graph(sess.graph)
+    # Tensorboard setup
+    writer1 = tf.summary.FileWriter('./logs')
+    writer1.add_graph(sess.graph)
 
-#writer2 = tf.summary.FileWriter("./logs/nn_logs", sess.graph)  # for 0.8
-#merged = tf.summary.merge_all()
+    #writer2 = tf.summary.FileWriter("./logs/nn_logs", sess.graph)  # for 0.8
+    #merged = tf.summary.merge_all()
 
-for j in range(num_epochs):
+    for j in range(num_epochs):
 
-    # Train our model
-    train(optimizer, input_p, output_p)
-    # Test it by making it generate some characters
-    generate(input_data[3 * batch_size: 3 * batch_size + batch_size])  # For now the seed will just be the third batch.
-    #TODO: allow user-input seeds
+        # Train our model
+        train(optimizer, input_p, output_p)
+        # Test it by making it generate some characters
+        generate(input_data[3 * batch_size: 3 * batch_size + batch_size])  # For now the seed will just be the third batch.
+        #TODO: allow user-input seeds
