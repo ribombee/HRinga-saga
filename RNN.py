@@ -4,13 +4,13 @@ import numpy as np
 num_epochs = 10000  # The number of times we iterate through the training data
 learning_rate = 0.001  # The size of the steps we take in the gradient descent
 batch_size = 200  # How many characters we feed through before back-propagating all of them
-sequence_len = 10 #The length of the sequence of characters used to predict the next one
+sequence_len = 20 #The length of the sequence of characters used to predict the next one
 num_cells = 80 #The number of hidden units per LSTM cell
 num_lstms = 1 #Currently not in use.  TODO: implement
 forget = 1.0 #The forget bias of LSTM forget gates.
 
 def read_files():
-    njala = open(file='Islendingasogur/BrennuNjalsSaga.txt',encoding='UTF-8')
+    njala = open(file='Islendingasogur/HranaSagaHrings.txt',encoding='UTF-8')
     # Todo: read more sagas in and concatenate them
     return njala.read()
 
@@ -22,6 +22,10 @@ def embed(sagas):
     :return:
     '''
     unique_characters = list(set(sagas))  # All unique characters in our sagas.  We use this to generate the invidividual input vectors representing single characters.
+    
+    #We want to keep our list of unique characters in the model so that other programs can generate seed strings
+    tf_unique = tf.get_variable('unique_characters', dtype=tf.string, initializer=tf.convert_to_tensor(unique_characters))
+
 
     input_data= np.zeros((len(sagas), sequence_len, len(unique_characters)))
     output_data = np.zeros((len(sagas), len(unique_characters)))
@@ -62,7 +66,8 @@ def make_rnn(in_placeholder):
     lstm = tf.contrib.rnn.BasicLSTMCell(num_units = num_cells, forget_bias = forget)
     output = tf.nn.static_rnn(lstm, in_placeholder, dtype=tf.float32)[0]
 
-    pred = tf.matmul(output[-1], weights) + biases
+    pred = tf.matmul(output[-1], weights)
+    pred = tf.add(pred, biases)
 
     return pred
 
@@ -77,8 +82,8 @@ def train(optimizer, input_p, output_p, accuracy):
     # For each batch of data
     i = 0
     for j in range(len(input_data) // batch_size):
-        in_batch = input_data[i * batch_size: i * batch_size + batch_size]  # The i-th batch of input data.
-        out_batch = output_data[i * batch_size:i * batch_size + batch_size]  # The i-th batch of output data
+        in_batch = input_data[j * batch_size: j * batch_size + batch_size]  # The i-th batch of input data.
+        out_batch = output_data[j * batch_size:j * batch_size + batch_size]  # The i-th batch of output data
 
         outtext = ''
         intext = ''
@@ -160,17 +165,18 @@ if __name__ == '__main__':
 
     # These become our input and output nodes.
     input_p = tf.placeholder(tf.float32, [None, sequence_len, len(unique_characters)], name='input_p')
+    tf.add_to_collection('input_p', input_p)
     output_p = tf.placeholder(tf.float32, [None, len(unique_characters)], name='output_p')
 
     pred = make_rnn(input_p)
-
+    tf.add_to_collection('pred', pred)
     correct_pred =  tf.equal(tf.argmax(pred,1), tf.argmax(output_p, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, dtype = tf.float32))
 
     # Parameters for back propagation
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = pred, labels = output_p))  # Our cost function
     # We will use gradient descent to find a local minimum of the cost function.
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
     # Our tensorflow session!
     with tf.Session() as sess:
@@ -186,12 +192,15 @@ if __name__ == '__main__':
         #writer2 = tf.summary.FileWriter("./logs/nn_logs", sess.graph)  # for 0.8
         #merged = tf.summary.merge_all()
 
+        saver = tf.train.Saver()
         for j in range(num_epochs):
 
             # Train our model
             acc, loss = train(optimizer, input_p, output_p, accuracy)
             # Test it by making it generate some characters
 
+            print(input_data[4:5:].shape)
             generate(input_data[4:5:])  # For now the seed will just be one of our training batches.
             print("Accuracy: ", acc, ", Loss: ", loss)
             #TODO: allow user-input seeds
+            saver.save(sess, './model/test_save')
