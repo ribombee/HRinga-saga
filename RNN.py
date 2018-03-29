@@ -1,10 +1,10 @@
 import tensorflow as tf
 import numpy as np
 
-num_epochs = 10000  # The number of times we iterate through the training data
+num_epochs = 100  # The number of times we iterate through the training data
 learning_rate = 0.001  # The size of the steps we take in the gradient descent
 batch_size = 200  # How many characters we feed through before back-propagating all of them
-sequence_len = 10 #The length of the sequence of characters used to predict the next one
+sequence_len = 20 #The length of the sequence of characters used to predict the next one
 num_cells = 80 #The number of hidden units per LSTM cell
 num_lstms = 1 #Currently not in use.  TODO: implement
 forget = 1.0 #The forget bias of LSTM forget gates.
@@ -13,7 +13,6 @@ def read_files():
     njala = open(file='Islendingasogur/BrennuNjalsSaga.txt',encoding='UTF-8')
     # Todo: read more sagas in and concatenate them
     return njala.read()
-
 
 def embed(sagas):
     '''
@@ -40,6 +39,11 @@ def embed(sagas):
 
     return input_data, output_data, unique_characters
 
+#Helper functions for conversion to and from one-hot vectors
+def char_to_onehot(char):
+    onehot = np.zeros(len(unique_characters))
+    onehot[unique_characters.index(char)] = 1
+    return onehot
 
 def make_rnn(in_placeholder):
     '''
@@ -51,13 +55,9 @@ def make_rnn(in_placeholder):
 
 
     #Transpose the data, reshape and split to get sequence len number of tensors representing
-    #print("at start: ", in_placeholder)
     in_placeholder = tf.transpose(in_placeholder, [1, 0, 2])
-    #print("after transpose: ", in_placeholder)
     in_placeholder = tf.reshape(in_placeholder, [-1, len(unique_characters)])
-    #print("after reshape: ", in_placeholder)
     in_placeholder = tf.split(in_placeholder, sequence_len, 0)
-    #print("after split: ", in_placeholder)
 
     lstm = tf.contrib.rnn.BasicLSTMCell(num_units = num_cells, forget_bias = forget)
     output = tf.nn.static_rnn(lstm, in_placeholder, dtype=tf.float32)[0]
@@ -75,39 +75,26 @@ def train(optimizer, input_p, output_p, accuracy):
     :param output_p: output node
     '''
     # For each batch of data
-    i = 0
     for j in range(len(input_data) // batch_size):
-        in_batch = input_data[i * batch_size: i * batch_size + batch_size]  # The i-th batch of input data.
-        out_batch = output_data[i * batch_size:i * batch_size + batch_size]  # The i-th batch of output data
-
-        outtext = ''
-        intext = ''
-        for k in range(batch_size):
-            intext += unique_characters[np.argmax(in_batch[k])]
-            outtext += unique_characters[np.argmax(out_batch[k])]
-        #print("in: ", intext)
-        #print("out: ", outtext)
-
+        in_batch = input_data[j * batch_size: j * batch_size + batch_size]  # The i-th batch of input data.
+        out_batch = output_data[j * batch_size:j * batch_size + batch_size]  # The i-th batch of output data
         o,acc, loss = sess.run([optimizer, accuracy, cost], feed_dict={input_p: in_batch, output_p: out_batch})
-
     return acc, loss
-
 
 def generate(seed):
     '''
     :param seed:
     :return:
     '''
-    tac = ''
+    generated_string = ''
     one_run = sess.run([pred], feed_dict={input_p: seed})
 
     #Print the contents of the seed
     seed_str = ''
-    for i in range(10):
+    for i in range(sequence_len):
         seed_str += unique_characters[np.argmax(seed[0][i])]
-    print(seed_str)
 
-    for i in range(200):
+    for i in range(500):
         predicted = np.asarray(one_run[0]).astype('float64')[0]
         index, probabilities = activate_clean(predicted)
         seed = seed[:,1:,:] # Remove the first character from the seed
@@ -116,11 +103,10 @@ def generate(seed):
         one_run = sess.run([pred], feed_dict={input_p: seed})
 
         predicted_chars = unique_characters[index]
-        tac += predicted_chars
+        generated_string += predicted_chars
 
     #writer2.add_summary(summary, i)
-    #print(i, acc)
-    print("Epoch nr ", j, ": ", seed_str , tac)
+    print("Epoch nr ", j, ": ", seed_str , generated_string)
 
 def sigmoid(x):
     '''
@@ -144,9 +130,10 @@ def activate_clean(output):
 
     #Activate
     #output = sigmoid(output / 0.5)
-    output = np.exp(output / 0.5) #Just plugging the value in for now
+    output = np.exp(output / 0.5) #Just plugging the value of the temperature in for now
     #Normalize
     output = output / sum(output)
+    #Choose a character
     index_of_probability = np.random.choice(range(len(unique_characters)), p = output)
     #index_of_probability = np.argmax(output)
     clean_output = np.zeros(len(output))
@@ -170,7 +157,7 @@ if __name__ == '__main__':
     # Parameters for back propagation
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = pred, labels = output_p))  # Our cost function
     # We will use gradient descent to find a local minimum of the cost function.
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(cost)
 
     # Our tensorflow session!
     with tf.Session() as sess:
@@ -186,12 +173,19 @@ if __name__ == '__main__':
         #writer2 = tf.summary.FileWriter("./logs/nn_logs", sess.graph)  # for 0.8
         #merged = tf.summary.merge_all()
 
+        #TODO: introduce training and testing mode, save trained model after training, load trained model to generate.
+        user_seed = input("Enter a seed <press enter to skip>: ")
+        user_onehots = np.zeros([1, len(user_seed), len(unique_characters)])
+        for i in range(len(user_seed)):
+            user_onehots[0][i][unique_characters.index(user_seed[i])] = 1
+
         for j in range(num_epochs):
 
             # Train our model
             acc, loss = train(optimizer, input_p, output_p, accuracy)
             # Test it by making it generate some characters
-
-            generate(input_data[4:5:])  # For now the seed will just be one of our training batches.
+            if(len(user_seed) == 0):
+                generate(input_data[110:111:])  # If no seed was entered, just take a seed from the training data
+            else:
+                generate(user_onehots) #Otherwise, use the seed to generate text.
             print("Accuracy: ", acc, ", Loss: ", loss)
-            #TODO: allow user-input seeds
