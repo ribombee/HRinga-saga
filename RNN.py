@@ -22,10 +22,6 @@ def embed(sagas):
     '''
     unique_characters = list(set(sagas))  # All unique characters in our sagas.  We use this to generate the invidividual input vectors representing single characters.
     
-    #We want to keep our list of unique characters in the model so that other programs can generate seed strings
-    tf_unique = tf.get_variable('unique_characters', dtype=tf.string, initializer=tf.convert_to_tensor(unique_characters))
-
-
     input_data= np.zeros((len(sagas), sequence_len, len(unique_characters)))
     output_data = np.zeros((len(sagas), len(unique_characters)))
 
@@ -161,11 +157,9 @@ if __name__ == '__main__':
 
     # These become our input and output nodes.
     input_p = tf.placeholder(tf.float32, [None, sequence_len, len(unique_characters)], name='input_p')
-    tf.add_to_collection('input_p', input_p)
     output_p = tf.placeholder(tf.float32, [None, len(unique_characters)], name='output_p')
 
     pred = make_rnn(input_p)
-    tf.add_to_collection('pred', pred)
     correct_pred =  tf.equal(tf.argmax(pred,1), tf.argmax(output_p, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, dtype = tf.float32))
 
@@ -174,6 +168,12 @@ if __name__ == '__main__':
     # We will use gradient descent to find a local minimum of the cost function.
 
     optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(cost)
+
+    #setting variables for other programs to reference when generating strings on a saved model
+    tf.get_variable('unique_characters', dtype=tf.string, initializer=tf.convert_to_tensor(unique_characters))
+    tf.get_variable('sequence_length', dtype=tf.int32, initializer=sequence_len)
+    tf.add_to_collection('pred', pred)
+    tf.add_to_collection('input_p', input_p)
 
     # Our tensorflow session!
     with tf.Session() as sess:
@@ -186,25 +186,18 @@ if __name__ == '__main__':
         writer1 = tf.summary.FileWriter('./logs')
         writer1.add_graph(sess.graph)
 
-        #writer2 = tf.summary.FileWriter("./logs/nn_logs", sess.graph)  # for 0.8
-        #merged = tf.summary.merge_all()
-
+        #instantiate a saver for the model
         saver = tf.train.Saver()
-        #TODO: introduce training and testing mode, save trained model after training, load trained model to generate.
-        user_seed = []#input("Enter a seed <press enter to skip>: ")
-        user_onehots = np.zeros([1, len(user_seed), len(unique_characters)])
-        for i in range(len(user_seed)):
-            user_onehots[0][i][unique_characters.index(user_seed[i])] = 1
+
+        #for i in range(len(seed)):
+            #user_onehots[0][i][unique_characters.index(seed[i])] = 1
 
         for j in range(num_epochs):
 
             # Train our model
             acc, loss = train(optimizer, input_p, output_p, accuracy)
             # Test it by making it generate some characters
-            if(len(user_seed) == 0):
-                generate(input_data[110:111:])  # If no seed was entered, just take a seed from the training data
-            else:
-                generate(user_onehots) #Otherwise, use the seed to generate text.
+            generate(input_data[110:111:])
             #save our model so we can use it later
             saver.save(sess, './model/test_save')
             print("Accuracy: ", acc, ", Loss: ", loss)
