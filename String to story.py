@@ -25,12 +25,6 @@ def get_unique_characters():
         unique_characters += temp[i].decode('utf-8')
     return unique_characters
 
-def string_to_matrix(string, unique_characters):
-    matrix = np.zeros((len(string), len(unique_characters)))
-    for i, char in enumerate(string):
-        matrix[i, unique_characters.index(char)] = 1
-    return tf.reshape(matrix, [1, len(string), len(unique_characters)]).eval()
-
 if __name__ == '__main__':        
     with tf.Session() as sess:
         new_saver = tf.train.import_meta_graph('./model/test_save.meta')
