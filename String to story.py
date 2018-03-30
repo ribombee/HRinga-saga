@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 
+model_name = "default_RNN"
+
 def clean_input(input, total_length):
     '''
     Cleans user input by padding out to sequence length (or above)
@@ -40,18 +42,26 @@ def get_unique_characters():
 
 if __name__ == '__main__':        
     with tf.Session() as sess:
-        new_saver = tf.train.import_meta_graph('./model/test_save.meta')
+        new_saver = tf.train.import_meta_graph('./model/' + model_name + '.meta')
         new_saver.restore(sess, tf.train.latest_checkpoint('./model/'))
         unique_chars = get_unique_characters()
         sequence_len = tf.global_variables('sequence_length')[0].eval()
         
         length = input('How long should the story be <press enter to skip>?: ')
+        try:
+            int(length)
+        except Exception as identifier:
+            if(len(length) != 0):
+                print("Input must be an integer!")
+                raise
         seed_string = 'Enter a seed, max ' + sequence_len.astype(str) + ' characters <press enter to skip>: '
         user_seed = input(seed_string)
 
         #if nothing was entered for length or seed, default values are selected
         if(len(length) == 0):
             length = 200
+        else:
+            length = int(length)
         if(len(user_seed) == 0):
             user_seed = 'Mörður hét maður er kallaður var gígja.'
 
@@ -70,7 +80,7 @@ if __name__ == '__main__':
         pred = tf.get_collection('pred')[0]
 
         one_run = sess.run([pred], feed_dict={input_p: seed})
-        for i in range(1000):
+        for i in range(length):
             predicted = np.asarray(one_run[0]).astype('float64')[0]
             index, probabilities = activate_clean(predicted, unique_chars)
             seed = seed[:,1:,:] # Remove the first character from the seed

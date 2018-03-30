@@ -1,2 +1,2 @@
-model_checkpoint_path: "test_save"
-all_model_checkpoint_paths: "test_save"
+model_checkpoint_path: "default_RNN"
+all_model_checkpoint_paths: "default_RNN"

@@ -8,6 +8,7 @@ sequence_len = 20 #The length of the sequence of characters used to predict the 
 num_cells = 80 #The number of hidden units per LSTM cell
 num_lstms = 1 #Currently not in use.  TODO: implement
 forget = 1.0 #The forget bias of LSTM forget gates.
+model_name = "default_RNN" #The name of the network as it gets saved
 
 def read_files():
     njala = open(file='Islendingasogur/HranaSagaHrings.txt',encoding='UTF-8')
@@ -199,5 +200,5 @@ if __name__ == '__main__':
             # Test it by making it generate some characters
             generate(input_data[110:111:])
             #save our model so we can use it later
-            saver.save(sess, './model/test_save')
+            saver.save(sess, ('./model/' + model_name))
             print("Accuracy: ", acc, ", Loss: ", loss)
