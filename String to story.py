@@ -1,6 +1,19 @@
 import tensorflow as tf
 import numpy as np
 
+def clean_input(input, total_length):
+    '''
+    Cleans user input by padding out to sequence length (or above)
+    and shaving down to sequence length
+    '''
+    length_ratio = (int)(total_length/len(input)) + 1
+    for i in range(length_ratio):
+        input += input
+    
+    #shorten the seed to sequence length
+    input = input[(len(input) - total_length) : len(input)]
+    return input
+
 def activate_clean(output, unique_characters):
     '''
     Function borrowed from RNN.py
@@ -42,10 +55,10 @@ if __name__ == '__main__':
         if(len(user_seed) == 0):
             user_seed = 'Mörður hét maður er kallaður var gígja.'
 
-        #TODO: maybe have some padding. It's probably bad for generation but better than errors.
+        
+        output = user_seed
 
-        #shorten the seed to sequence length
-        user_seed = user_seed[:sequence_len]
+        user_seed = clean_input(user_seed, sequence_len)
 
         user_onehots = np.zeros([1, len(user_seed), len(unique_chars)])
         for i in range(len(user_seed)):
@@ -57,8 +70,6 @@ if __name__ == '__main__':
         pred = tf.get_collection('pred')[0]
 
         one_run = sess.run([pred], feed_dict={input_p: seed})
-
-        output = user_seed
         for i in range(1000):
             predicted = np.asarray(one_run[0]).astype('float64')[0]
             index, probabilities = activate_clean(predicted, unique_chars)
