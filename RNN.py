@@ -2,24 +2,24 @@ import tensorflow as tf
 import numpy as np
 import glob
 
-num_epochs = 1000            # The number of times we iterate through the training data
+num_epochs = 250            # The number of times we iterate through the training data
 learning_rate = 0.001       # The size of the steps we take in the gradient descent
 batch_size = 100            # How many characters we feed through before back-propagating all of them
 sequence_len = 10           # The length of the sequence of characters used to predict the next one
-num_cells = 80              # The number of hidden units per LSTM cell
+num_units = 128             # The number of hidden units per LSTM cell
 forget = 1.0                # The forget bias of LSTM forget gates.
 model_name = "default_RNN"  # The name of the network as it gets saved
 
 
 def read_files():
     """
-
-    :return:
+    Reads all files in "Islendingasogur" folder
+    :return: A string containing content of all text files in the folder.
     """
     all_sagas = ''
 
     for single_file in glob.glob('Islendingasogur/*'):
-        all_sagas += open(file = single_file, encoding = 'UTF-8').read()
+        all_sagas += open(file = single_file, encoding='UTF-8').read()
 
     return all_sagas
 
@@ -28,7 +28,7 @@ def embed(sagas):
     """
     The data is embedded into numerical data (vectors to represent characters) that we can use to train our RNN.
     :param sagas: Training data
-    :return:
+    :return: Tensor containing the input data in embeded form, array of unique character in the input.
     """
 
     # All unique characters in our sagas.  We use this to generate the invidividual
@@ -43,7 +43,7 @@ def embed(sagas):
         tic = ''
         for j, char_input in enumerate(sequence_slice):
             if j < sequence_len:
-                input_data[i,j,unique_characters.index(char_input)] = 1
+                input_data[i, j, unique_characters.index(char_input)] = 1
             else:
                 output_data[i, unique_characters.index(char_input)] = 1
                 tic += char_input
@@ -51,22 +51,12 @@ def embed(sagas):
     return input_data, output_data, unique_characters
 
 
-def char_to_onehot(char):
-    """
-    Helper function for conversion to and from one-hot vectors
-    :param char:
-    :return: onehot
-    """
-    onehot = np.zeros(len(unique_characters))
-    onehot[unique_characters.index(char)] = 1
-    return onehot
-
 def make_rnn(in_placeholder):
     """
-    Instantiates a recurrant neural network.
-    :return:
+    Instantiates a recurrent neural network.
+    :return: An initial prediction.
     """
-    weights = tf.Variable(tf.random_normal([num_cells, len(unique_characters)]), name='weights')
+    weights = tf.Variable(tf.random_normal([num_units, len(unique_characters)]), name='weights')
     biases = tf.Variable(tf.random_normal([len(unique_characters)]), name='biases')
 
     # Transpose the data, reshape and split to get sequence len number of tensors representing
@@ -74,7 +64,7 @@ def make_rnn(in_placeholder):
     in_placeholder = tf.reshape(in_placeholder, [-1, len(unique_characters)])
     in_placeholder = tf.split(in_placeholder, sequence_len, 0)
 
-    lstm = tf.contrib.rnn.BasicLSTMCell(num_units = num_cells, forget_bias = forget)
+    lstm = tf.contrib.rnn.BasicLSTMCell(num_units=num_units, forget_bias=forget)
     output = tf.nn.static_rnn(lstm, in_placeholder, dtype=tf.float32)[0]
 
     pred = tf.matmul(output[-1], weights)
@@ -89,6 +79,7 @@ def train(optimizer, input_p, output_p, accuracy):
     :param optimizer: an optimizer
     :param input_p: input node
     :param output_p: output node
+    :return: Accuracy and loss at current state.
     """
     # For each batch of data
     for j in range(len(input_data) // batch_size):
@@ -107,8 +98,9 @@ def train(optimizer, input_p, output_p, accuracy):
 
 def generate(seed):
     """
-    :param seed:
-    :return:
+    Generates a string from the model.
+    :param seed: A seed for the generation.
+    :return: A string generated my the neural network.
     """
     generated_string = ''
     one_run = sess.run([pred], feed_dict={input_p: seed})
@@ -130,16 +122,7 @@ def generate(seed):
         predicted_chars = unique_characters[index]
         generated_string += predicted_chars
 
-    print("Epoch nr ", j, ": ", seed_str , generated_string)
-
-
-def sigmoid(x):
-    """
-    The sigmoid function.
-    :param x:
-    :return: sigmoid(x)
-    """
-    return np.exp(x) / (1+np.exp(x))
+    print("Epoch nr ", j, ": ", seed_str, generated_string)
 
 
 def activate_clean(output):
@@ -148,8 +131,8 @@ def activate_clean(output):
     We want to select a character based on this distribution, but always selecting the character with the highest
     probability is not correct, as the highest probability is not necessarily 100%, so we use
     np.random.multinomial to select a character randomly, based on the probabilities.
-    :param output:
-    :return:
+    :param output: data to clean.
+    :return: indax of probability, clean output.
     """
     # First we must normalize the probability distribution.
     # We start by getting all positive numbers by running the values through an activation function.
@@ -159,7 +142,7 @@ def activate_clean(output):
     # Normalize
     output = output / sum(output)
     # Choose a character
-    index_of_probability = np.random.choice(range(len(unique_characters)), p = output)
+    index_of_probability = np.random.choice(range(len(unique_characters)), p=output)
     clean_output = np.zeros(len(output))
     clean_output[index_of_probability] = 1
 
@@ -210,11 +193,10 @@ if __name__ == '__main__':
             acc, loss = train(optimizer, input_p, output_p, accuracy)
 
             # Test it by making it generate some characters
-            #Uncomment the line below to get a generated string after each training epoch.
+            # Uncomment the line below to get a generated string after each training epoch.
             #generate(input_data[110:111:])
             # Save our model so we can use it later
             saver.save(sess, ('./model/' + model_name))
-            #Print some useful statistics
+            # Print some useful statistics
             print(j, ",",acc, ",", loss)
-            #print("Accuracy: ", acc, ", Loss: ", loss)
         generate(input_data[111:112:])

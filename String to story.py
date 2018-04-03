@@ -3,23 +3,25 @@ import numpy as np
 
 model_name = "default_RNN"
 
+
 def clean_input(input, total_length):
-    '''
+    """
     Cleans user input by padding out to sequence length (or above)
     and shaving down to sequence length
-    '''
+    """
     length_ratio = (int)(total_length/len(input)) + 1
     for i in range(length_ratio):
         input += input
     
-    #shorten the seed to sequence length
+    # shorten the seed to sequence length
     input = input[(len(input) - total_length) : len(input)]
     return input
 
+
 def activate_clean(output, unique_characters):
-    '''
+    """
     Function borrowed from RNN.py
-    '''
+    """
     output = np.exp(output / 0.5)
     output = output / sum(output)
     index_of_probability = np.random.choice(range(len(unique_characters)), p = output)
@@ -28,17 +30,19 @@ def activate_clean(output, unique_characters):
 
     return index_of_probability, clean_output
 
+
 def get_unique_characters():
-    '''
+    """
     Queries the stored information about unique characters from when 
     model was created.
-    '''
+    """
     temp = tf.global_variables('unique_characters')
     temp = temp[0].eval()
     unique_characters = []
     for i, char in enumerate(temp):
         unique_characters += temp[i].decode('utf-8')
     return unique_characters
+
 
 if __name__ == '__main__':        
     with tf.Session() as sess:
@@ -57,7 +61,7 @@ if __name__ == '__main__':
         seed_string = 'Enter a seed, max ' + sequence_len.astype(str) + ' characters <press enter to skip>: '
         user_seed = input(seed_string)
 
-        #if nothing was entered for length or seed, default values are selected
+        # if nothing was entered for length or seed, default values are selected
         if(len(length) == 0):
             length = 200
         else:
@@ -65,7 +69,6 @@ if __name__ == '__main__':
         if(len(user_seed) == 0):
             user_seed = 'Mörður hét maður er kallaður var gígja.'
 
-        
         output = user_seed
 
         user_seed = clean_input(user_seed, sequence_len)
