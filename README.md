@@ -1,6 +1,6 @@
 # HRinga-saga
+Final project for Artificial Intelligence, spring semester 2018.
 Lokaverkefni í gervigreind vorið 2018.
-Final project for ARTI, spring semester 2018.
 
 ## Dependencies: 
  * Tensorflow
